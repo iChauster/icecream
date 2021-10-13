@@ -3,8 +3,6 @@ import numpy as np
 import copy
 import logging
 from typing import Callable, Dict, List, Tuple, Union
-from collections import defaultdict
-
 
 class Player:
     def __init__(self, flavor_preference: List[int], rng: np.random.Generator, logger: logging.Logger) -> None:
@@ -35,22 +33,17 @@ class Player:
     def get_init_distribution(self):
         flavor_preference_len = len(self.flavor_preference)
         return [self.total_cells / flavor_preference_len] * flavor_preference_len 
+        
     def get_distribution(self, served, top_layer):
         # index of distribution corresopnds to flavor with value i + 1
         self.distribution = self.get_init_distribution()
-        alt = defaultdict(int)
         for row in top_layer:
             for val in row:
                 if val > 0:
                     self.distribution[val - 1] -= 1
-                    alt[val - 1] += 1
-        alt = defaultdict(int)
         for player in served:
             for flavor, consumed in player.items():
                 self.distribution[flavor - 1] -= consumed
-                alt[flavor-1] += consumed 
-        print(self.distribution)
-        print()
 
     def update_hidden_cell_expectation(self, served, top_layer):
         distribution = self.get_distribution(served, top_layer)
