@@ -63,21 +63,21 @@ class Player:
             for flavor, consumed in player.items():
                 self.distribution[flavor - 1] -= consumed
 
-    def get_expected_user_score_of_surface_flavors(self, top_layer, estimatedPreferences):
+    def get_expected_user_score_of_surface_flavors(self, top_layer, player_preferences):
         # here we assume player_preferences returns [flavor_3, flavor_2, flavor_1], where the expected score
         # for each flavor is len(flavor_prefs) - index
         surface_flavor_count = self.get_surface_flavors(top_layer) # an array of flavors [flavor_1_ct, flavor_2_ct]
         n = len(player_preferences)
         expected_score = 0
         for i in range(n):
-            expected_score += surface_flavor_count[i] * estimatedPreferences[i]
+            expected_score += surface_flavor_count[i] * player_preferences[i]
         return expected_score
 
     def get_best_pass(self, playerCount, top_layer, estimatedPreferences):
         bestPlayerToPass = None
         bestExpectedScore = -1
         for playerIdx in range(playerCount):
-            exp_score = self.get_expected_user_score_of_surface_flavors(top_layer, estimatedPreferences)
+            exp_score = self.get_expected_user_score_of_surface_flavors(top_layer, estimatedPreferences[playerIdx])
             if exp_score > bestExpectedScore:
                 bestExpectedScore = exp_score
                 bestPlayerToPass = playerIdx
