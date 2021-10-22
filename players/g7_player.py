@@ -268,9 +268,7 @@ class Player:
 
                     best_for_others = max(best_for_others, exp_score)
                 
-                # print(best_for_others)
-                
-                score += (best_for_others / num_scooped) if num_scooped > 0 else 0
+                score -= (best_for_others / num_scooped) / (self.player_count - 1) if num_scooped > 0 else 0
             
             self.move_scores[-score].append((num_moves, num_scooped, i, j))
             self.scoop_numbers[num_scooped].append((i,j))
