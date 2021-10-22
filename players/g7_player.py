@@ -54,8 +54,13 @@ class Player:
                              (0.73158863, 2.200507703)],
                          3: [(80.15432119, 15.14688763), (18.00458439, 13.4309277), (1.841094416, 4.224895053)], 
                          2: [(90.58839827, 12.80923962), (9.411601726, 12.80923962)] } 
-        
 
+        self.can_gaussian = True
+        if len(flavor_preference) not in self.gaussian:
+            self.can_gaussian = False
+
+        self.player_prefs = {}
+        
     def get_init_distribution(self):
         flavor_preference_len = len(self.flavor_preference)
         return [self.total_cells / flavor_preference_len] * flavor_preference_len
@@ -90,11 +95,11 @@ class Player:
             for f in range(1, numFlavors + 1):
                 if(totalCells == 0): #empty bowl
                     playerPref.append(0)
-                    continue;
+                    continue
                 flavorCount = bowl.get(f)
                 if flavorCount == 0: #no data on this flavor
                     playerPref.append(0)
-                    continue;
+                    continue
                 percentage = (flavorCount*100)/totalCells
                 vector = []
                 for gaussian in gaussiansList:
@@ -124,9 +129,6 @@ class Player:
 
         return estimatedPreferences
 
-
-
-
     def get_expected_user_score_of_surface_flavors(self, player_preferences, top_layer):
         # here we assume player_preferences returns [flavor_3, flavor_2, flavor_1], where the expected score
         # for each flavor is len(flavor_prefs) - index
@@ -134,22 +136,25 @@ class Player:
         n = len(player_preferences)
         expected_score = 0
         for i in range(n):
-            flavorIdx = player_preferences[i] - 1
-            expected_score += surface_flavor_count[flavorIdx] * (n - flavorIdx)
+            flavorIdx = player_preferences[i]
+            expected_score += surface_flavor_count[i] * flavorIdx
         return expected_score
 
-    def get_best_pass(self, playerCount, top_layer):
+    def get_best_pass(self, playerCount, top_layer, served, turns):
         bestPlayerToPass = None
         bestExpectedScore = -1
+        max_turns = np.max(turns)
+        min_turns = np.min(turns)
         for playerIdx in range(playerCount):
-            '''
-            player_prefs = get_flavor_preferences(playerIdx, playerCount)
+            if playerIdx == self.playerIdx or (turns[playerIdx] == max_turns and max_turns != min_turns):
+                continue
+            # print(self.player_count, len(self.flavor_preference), served)
+            player_prefs = self.player_prefs[playerIdx]
+            # print("hop", player_prefs)
             exp_score = self.get_expected_user_score_of_surface_flavors(player_prefs, top_layer)
             if exp_score > bestExpectedScore:
                 bestExpectedScore = exp_score
                 bestPlayerToPass = playerIdx
-            '''
-            pass
         return bestPlayerToPass
 
     def update_hidden_cell_expectation(self, served, top_layer):
@@ -215,7 +220,13 @@ class Player:
     def total_scoop_in_bowl(self, player_idx, served):
         return sum(served[player_idx].values())
 
-    def updated_score(self, i, j, top_layer, curr_level):
+    def get_expected_user_score_of_scoop(self, scoop, player_prefs):
+        total = 0
+        for s in scoop:
+            total += player_prefs[s-1]
+        return total
+
+    def updated_score(self, i, j, top_layer, curr_level, served):
         """
         Updated scoop + score function
         """
@@ -229,11 +240,14 @@ class Player:
         prev_num_unseen_cells = 0
         num_unseen_cells = 0
 
+        total_scoop = []
+
         for level in range(max_level, min_level - 1, -1):
             for x in range(2):
                 for y in range(2):
                     if curr_level[i + x][j + y] == level:
                         cumulative_score += self.flavor_points[top_layer[i + x][j + y]]
+                        total_scoop.append(top_layer[i + x][j + y])
                         num_scooped += 1
                         num_unseen_cells += 1
 
@@ -241,8 +255,22 @@ class Player:
             cumulative_score += prev_num_unseen_cells * self.flavor_points[-2]
             num_scooped += prev_num_unseen_cells
             score = (cumulative_score / num_scooped) if num_scooped > 0 else 0
-            self.move_scores[-score].append((num_moves, num_scooped, i, j))
 
+            if score == 0:
+                pass
+            elif self.can_gaussian:
+                best_for_others = -1
+                for playerIdx in range(self.player_count):
+                    if playerIdx == self.playerIdx:
+                        continue
+                    player_prefs = self.player_prefs[playerIdx]
+                    exp_score = self.get_expected_user_score_of_scoop(total_scoop, player_prefs)
+
+                    best_for_others = max(best_for_others, exp_score)
+                
+                score -= (best_for_others / num_scooped) / (self.player_count - 1) if num_scooped > 0 else 0
+            
+            self.move_scores[-score].append((num_moves, num_scooped, i, j))
             self.scoop_numbers[num_scooped].append((i,j))
 
             prev_num_unseen_cells = num_unseen_cells
@@ -304,18 +332,14 @@ class Player:
             {"action": "pass",  "values" : i} pass to next player with index i
         """
 
-        #print(get_flavors())
-        #print(player_idx)
-        #print(get_served())
-        #print(get_player_count())
-
-        #calculate estimatedPreferences
-        estimatedPreferences = self.get_flavor_preferences(get_player_count(), len(get_flavors()), get_served())
+        self.player_count = get_player_count()
+        self.playerIdx = player_idx
+        served = get_served()
 
         max_scoop_i, max_scoop_j = -1, -1
         max_scoop_point = -1
 
-        self.update_hidden_cell_expectation(get_served(), top_layer)
+        self.update_hidden_cell_expectation(served, top_layer)
 
         remaining_scoops = self.remaining_scoops
         if len(self.priority_moves) > 0:
@@ -330,9 +354,16 @@ class Player:
                         max_scoop_cells += 1
             
         else:
+            if (self.can_gaussian and not self.player_prefs):
+                for playerIdx in range(self.player_count):
+                    if playerIdx == self.playerIdx:
+                        continue
+                    player_prefs = self.get_flavor_preferences(self.player_count, len(self.flavor_preference), served)[playerIdx]
+                    self.player_prefs[playerIdx] = player_prefs
+            
             for i in range(len(top_layer) - 1):
                 for j in range(len(top_layer[i]) - 1):
-                    self.updated_score(i, j, top_layer, curr_level)
+                    self.updated_score(i, j, top_layer, curr_level, served)
 
             scores = list(self.move_scores.keys())
 
@@ -371,23 +402,29 @@ class Player:
         self.scoop_numbers = defaultdict(list)
 
         if time_to_pass or max_scoop_cells > remaining_scoops:
-            if remaining_scoops > 0:
-                print("Zoppa1")
-            points = []
-            served = get_served()
-            turns = get_turns_received()
-            for idx in range(get_player_count()):
-                point = self.calc_scr_flavor_pref(served[idx])
-                points.append((point,turns[idx],idx))
-
-            # next_player = self.get_best_pass(get_player_count(), top_layer)
-            
-            sorted_points = sorted(points, key=lambda x: (x[1], x[0]))
-            next_player = sorted_points[0][2]
-            self.round += 1
-            self.priority_moves = []
-            self.remaining_scoops = 24
-            return {"action": "pass", "values": next_player}
+            if (self.can_gaussian):
+                turns = get_turns_received()
+                next_player = self.get_best_pass(get_player_count(), top_layer, served, turns)
+                
+                self.round += 1
+                self.priority_moves = []
+                self.remaining_scoops = 24
+                self.player_prefs = {}
+                return {"action": "pass", "values": next_player}
+            else:
+                points = []
+                served = get_served()
+                turns = get_turns_received()
+                for idx in range(get_player_count()):
+                    point = self.calc_scr_flavor_pref(served[idx])
+                    points.append((point,turns[idx],idx))
+                
+                sorted_points = sorted(points, key=lambda x: (x[1], x[0]))
+                next_player = sorted_points[0][2]
+                self.round += 1
+                self.priority_moves = []
+                self.remaining_scoops = 24
+                return {"action": "pass", "values": next_player}
 
         self.remaining_scoops -= max_scoop_cells
         return {"action": "scoop",  "values": (max_scoop_i, max_scoop_j)}
