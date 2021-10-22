@@ -307,6 +307,8 @@ class Player:
             for idx in range(get_player_count()):
                 point = self.calc_scr_flavor_pref(served[idx])
                 points.append((point,turns[idx],idx))
+
+            # next_player = self.get_best_pass(get_player_count(), top_layer)
             
             sorted_points = sorted(points, key=lambda x: (x[1], x[0]))
             next_player = sorted_points[0][2]
