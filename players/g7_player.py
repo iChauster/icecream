@@ -78,6 +78,55 @@ class Player:
             for flavor, consumed in player.items():
                 self.distribution[flavor - 1] -= consumed
 
+    def get_flavor_preferences(self, playerCount, numFlavors, served):
+        gaussiansList = self.gaussian.get(numFlavors)
+        estimatedPreferences = []
+        for player in range(playerCount):
+            playerPref = []
+            bowl = served[player]
+            totalCells = 0
+            for count in bowl.values():
+                totalCells += count
+            for f in range(1, numFlavors + 1):
+                if(totalCells == 0): #empty bowl
+                    playerPref.append(0)
+                    continue;
+                flavorCount = bowl.get(f)
+                if flavorCount == 0: #no data on this flavor
+                    playerPref.append(0)
+                    continue;
+                percentage = (flavorCount*100)/totalCells
+                vector = []
+                for gaussian in gaussiansList:
+                    mean = gaussian[0]
+                    sigma = gaussian[1]
+                    gOutput = (1/(sigma*math.sqrt(2*math.pi)))*math.exp((-1/2)*((percentage - mean)/sigma)**2)
+                    vector.append(gOutput)
+
+                #normalize vector
+                norm = 0
+                for gOutput in vector:
+                    norm += gOutput
+                #norm = math.sqrt(norm)
+                vector = [gOutput/norm for gOutput in vector]
+
+                #calculate expectation
+                expectation = 0
+                for i in range(len(vector)):
+                    flavorValue = numFlavors - i
+                    gOutput = vector[i]
+                    expectation += flavorValue*gOutput
+
+                #now expectation for this flavor is calculated, add to player preference list
+                playerPref.append(expectation)
+            #all flavors estimated for this player
+            estimatedPreferences.append(playerPref)
+
+        return estimatedPreferences
+
+
+
+
     def get_expected_user_score_of_surface_flavors(self, player_preferences, top_layer):
         # here we assume player_preferences returns [flavor_3, flavor_2, flavor_1], where the expected score
         # for each flavor is len(flavor_prefs) - index
@@ -94,7 +143,7 @@ class Player:
         bestExpectedScore = -1
         for playerIdx in range(playerCount):
             '''
-            player_prefs = get_flavor_preferences(playerIdx)
+            player_prefs = get_flavor_preferences(playerIdx, playerCount)
             exp_score = self.get_expected_user_score_of_surface_flavors(player_prefs, top_layer)
             if exp_score > bestExpectedScore:
                 bestExpectedScore = exp_score
@@ -254,6 +303,15 @@ class Player:
             {"action": "scoop",  "values" : (i,j)} stating to scoop the 4 cells with index (i,j), (i+1,j), (i,j+1), (i+1,j+1)
             {"action": "pass",  "values" : i} pass to next player with index i
         """
+
+        #print(get_flavors())
+        #print(player_idx)
+        #print(get_served())
+        #print(get_player_count())
+
+        #calculate estimatedPreferences
+        estimatedPreferences = self.get_flavor_preferences(get_player_count(), len(get_flavors()), get_served())
+        print(estimatedPreferences)
 
         max_scoop_i, max_scoop_j = -1, -1
         max_scoop_point = -1
