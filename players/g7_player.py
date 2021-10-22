@@ -311,7 +311,6 @@ class Player:
 
         #calculate estimatedPreferences
         estimatedPreferences = self.get_flavor_preferences(get_player_count(), len(get_flavors()), get_served())
-        print(estimatedPreferences)
 
         max_scoop_i, max_scoop_j = -1, -1
         max_scoop_point = -1
